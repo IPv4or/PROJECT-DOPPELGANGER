@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROJECT DOPPELGANGER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0A0A0A;
+            font-family: 'IBM Plex Mono', monospace;
+            color: #E0E0E0;
+        }
+        .font-display {
+            font-family: 'Syne', sans-serif;
+            letter-spacing: 0.05em;
+        }
+        /* Hide the default file input button */
+        #file-upload {
+            display: none;
+        }
+        /* Custom styles for the drop zone */
+        #drop-zone {
+            border-color: #444;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        #drop-zone.drag-over {
+            background-color: #1a1aff;
+            border-color: #00ffff;
+        }
+        .btn {
+            background-color: transparent;
+            border: 1px solid #E0E0E0;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            color: #E0E0E0;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        .btn:hover {
+            background-color: #E0E0E0;
+            color: #0A0A0A;
+        }
+        .btn-primary {
+            border-color: #00ffff;
+            color: #00ffff;
+        }
+        .btn-primary:hover {
+            background-color: #00ffff;
+            color: #0A0A0A;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+        .glitch-text {
+            animation: glitch 1s linear infinite;
+        }
+        @keyframes glitch{
+          2%,64%{ transform: translate(2px,0) skew(0deg); }
+          4%,60%{ transform: translate(-2px,0) skew(0deg); }
+          62%{ transform: translate(0,0) skew(5deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl text-center">
+        <!-- Header -->
+        <header class="mb-12">
+            <h1 class="font-display text-4xl md:text-5xl font-bold text-white">PROJECT DOPPELGANGER</h1>
+            <p class="mt-2 text-sm text-gray-400">REPLICATE MY AESTHETIC.</p>
+        </header>
+
+        <!-- Canvases for processing (hidden from user) -->
+        <canvas id="original-canvas" class="hidden"></canvas>
+        <canvas id="processed-canvas" class="hidden"></canvas>
+
+        <!-- Uploader / Previewer -->
+        <main>
+            <!-- Drop Zone -->
+            <div id="drop-zone" class="border-2 border-dashed rounded-none p-10 cursor-pointer">
+                <div id="upload-prompt">
+                    <p class="font-medium text-lg">DRAG & DROP IMAGE</p>
+                    <p class="text-xs text-gray-500 mt-1">OR CLICK TO SELECT FILE</p>
+                    <input type="file" id="file-upload" accept="image/png, image/jpeg, image/webp">
+                </div>
+            </div>
+
+            <!-- Image Preview Area -->
+            <div id="image-preview-container" class="mt-8 hidden">
+                <img id="image-preview" src="#" alt="Processed image" class="w-full h-auto border border-gray-700">
+            </div>
+            
+            <!-- Action Buttons -->
+            <div id="action-buttons" class="mt-8 hidden">
+                <button id="download-btn" class="btn btn-primary w-full sm:w-auto">
+                    DOWNLOAD REPLICA
+                </button>
+                 <button id="reset-btn" class="btn mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto">
+                    NEW SUBJECT
+                </button>
+            </div>
+        </main>
+
+        <footer class="mt-16">
+            <p class="text-xs text-gray-600">A digital art experiment. All processing is done client-side.</p>
+            <p class="text-xs text-gray-600">alpha version 1.1</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM element references
+        const dropZone = document.getElementById('drop-zone');
+        const fileUpload = document.getElementById('file-upload');
+        const uploadPrompt = document.getElementById('upload-prompt');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const actionButtons = document.getElementById('action-buttons');
+        const downloadBtn = document.getElementById('download-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const originalCanvas = document.getElementById('original-canvas');
+        const processedCanvas = document.getElementById('processed-canvas');
+        const originalCtx = originalCanvas.getContext('2d');
+        const processedCtx = processedCanvas.getContext('2d');
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileUpload.click());
+        fileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        });
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'DOPPELGANGER.png';
+            link.href = processedCanvas.toDataURL('image/png');
+            link.click();
+        });
+        resetBtn.addEventListener('click', () => {
+            fileUpload.value = '';
+            dropZone.classList.remove('hidden');
+            imagePreviewContainer.classList.add('hidden');
+            actionButtons.classList.add('hidden');
+        });
+
+        // --- Core Logic ---
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    processImage(img);
+                    dropZone.classList.add('hidden');
+                    imagePreviewContainer.classList.remove('hidden');
+                    actionButtons.classList.remove('hidden');
+                };
+                img.onerror = () => alert("FILE READ ERROR. PLEASE TRY AGAIN.");
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function processImage(img) {
+            originalCanvas.width = processedCanvas.width = img.width;
+            originalCanvas.height = processedCanvas.height = img.height;
+            originalCtx.drawImage(img, 0, 0);
+            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+            
+            applyColorGradeAndWarmth(imageData.data);
+            
+            processedCtx.putImageData(imageData, 0, 0);
+            imagePreview.src = processedCanvas.toDataURL('image/png');
+        }
+        
+        function generateCurveLUT(x1, y1, x2, y2) {
+            const lut = new Uint8ClampedArray(256);
+            const points = [ [0,0], [x1,y1], [x2,y2], [255,255] ];
+
+            for (let i = 0; i < 256; i++) {
+                let p1 = points[0], p2 = points[1];
+                if (i >= x1) { p1 = points[1]; p2 = points[2]; }
+                if (i >= x2) { p1 = points[2]; p2 = points[3]; }
+                const t = (p2[0] - p1[0]) === 0 ? 0 : (i - p1[0]) / (p2[0] - p1[0]);
+                lut[i] = p1[1] + t * (p2[1] - p1[1]);
+            }
+            return lut;
+        }
+
+        function applyColorGradeAndWarmth(data) {
+            const redLUT = generateCurveLUT(64, 80, 192, 176);
+            const greenLUT = generateCurveLUT(96, 96, 192, 224);
+            const blueLUT = generateCurveLUT(64, 48, 192, 208);
+            const warmStrength = 15;
+
+            for (let i = 0; i < data.length; i += 4) {
+                let r = redLUT[data[i]];
+                let g = greenLUT[data[i + 1]];
+                let b = blueLUT[data[i + 2]];
+
+                r = Math.min(255, r + warmStrength);
+                b = Math.max(0, b - warmStrength);
+
+                data[i] = r;
+                data[i + 1] = g;
+                data[i + 2] = b;
+            }
+        }
+    </script>
+</body>
+</html>
