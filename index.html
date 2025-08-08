@@ -69,7 +69,7 @@
         <!-- Header -->
         <header class="mb-12">
             <h1 class="font-display text-4xl md:text-5xl font-bold text-white">PROJECT DOPPELGANGER</h1>
-            <p class="mt-2 text-sm text-gray-400">REPLICATE MY AESTHETIC.</p>
+            <p class="mt-2 text-sm text-gray-400">REPLICATE THE AESTHETIC.</p>
         </header>
 
         <!-- Canvases for processing (hidden from user) -->
@@ -105,7 +105,6 @@
 
         <footer class="mt-16">
             <p class="text-xs text-gray-600">A digital art experiment. All processing is done client-side.</p>
-            <p class="text-xs text-gray-600">alpha version 1.1</p>
         </footer>
     </div>
 
@@ -205,9 +204,16 @@
         }
 
         function applyColorGradeAndWarmth(data) {
+            // Red Channel: low highlights, slightly high shadows (Inverse S-Curve)
             const redLUT = generateCurveLUT(64, 80, 192, 176);
-            const greenLUT = generateCurveLUT(96, 96, 192, 224);
-            const blueLUT = generateCurveLUT(64, 48, 192, 208);
+            
+            // Green Channel: high highlights, but kept in check to let blue dominate.
+            const greenLUT = generateCurveLUT(96, 96, 192, 210);
+
+            // Blue Channel: Pushed even higher in the highlights for a strong blue cast.
+            const blueLUT = generateCurveLUT(64, 48, 192, 230);
+            
+            // Warming filter to add back some temperature
             const warmStrength = 15;
 
             for (let i = 0; i < data.length; i += 4) {
