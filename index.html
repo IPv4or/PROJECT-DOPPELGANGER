@@ -18,9 +18,7 @@
             font-family: 'Syne', sans-serif;
             letter-spacing: 0.05em;
         }
-        #file-upload {
-            display: none;
-        }
+        #file-upload { display: none; }
         #drop-zone {
             border-color: #444;
             transition: background-color 0.3s ease, border-color 0.3s ease;
@@ -38,37 +36,40 @@
             transition: all 0.3s ease;
             text-transform: uppercase;
         }
-        .btn:hover {
-            background-color: #E0E0E0;
-            color: #0A0A0A;
-        }
-        .btn-primary {
-            border-color: #00ffff;
-            color: #00ffff;
-        }
-        .btn-primary:hover {
-            background-color: #00ffff;
-            color: #0A0A0A;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
-        }
+        .btn:hover { background-color: #E0E0E0; color: #0A0A0A; }
+        .btn-primary { border-color: #00ffff; color: #00ffff; }
+        .btn-primary:hover { background-color: #00ffff; color: #0A0A0A; box-shadow: 0 0 15px rgba(0, 255, 255, 0.5); }
         .temp-btn {
             border: 1px solid #555;
             color: #888;
             transition: all 0.2s ease-in-out;
         }
-        .temp-btn.active {
-            color: #FFFFFF;
-            border-color: #FFFFFF;
-            background-color: #222;
-        }
+        .temp-btn.active { color: #FFFFFF; border-color: #FFFFFF; background-color: #222; }
         .temp-btn.hot:hover, .temp-btn.hot.active { border-color: #FF8A00; color: #FF8A00; }
         .temp-btn.warm:hover, .temp-btn.warm.active { border-color: #FFC900; color: #FFC900; }
         .temp-btn.cold:hover, .temp-btn.cold.active { border-color: #00A3FF; color: #00A3FF; }
         .temp-btn.frozen:hover, .temp-btn.frozen.active { border-color: #00E0FF; color: #00E0FF; }
         
-        /* Styles for the crossfade transition */
-        #transition-canvas {
-            transition: opacity 0.4s ease-in-out;
+        #transition-canvas { transition: opacity 0.4s ease-in-out; }
+
+        /* AI Code Loader Styles */
+        #loader-overlay {
+            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+        }
+        .code-column {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            white-space: nowrap;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.8);
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            animation: scroll-up 3s linear infinite;
+        }
+        @keyframes scroll-up {
+            from { transform: translateY(0%); }
+            to { transform: translateY(-50%); }
         }
     </style>
 </head>
@@ -81,13 +82,13 @@
             <p class="mt-2 text-sm text-gray-400">REPLICATE THE LOOK</p>
         </header>
 
-        <!-- Canvases for processing (hidden from user) -->
+        <!-- Canvases (hidden) -->
         <canvas id="original-canvas" class="hidden"></canvas>
         <canvas id="curves-canvas" class="hidden"></canvas>
         <canvas id="processed-canvas" class="hidden"></canvas>
 
-        <!-- Uploader / Previewer -->
-        <main>
+        <!-- Main container for dynamic content -->
+        <main class="relative min-h-[200px]">
             <!-- Drop Zone -->
             <div id="drop-zone" class="border-2 border-dashed rounded-none p-10 cursor-pointer">
                 <div id="upload-prompt">
@@ -95,6 +96,11 @@
                     <p class="text-xs text-gray-500 mt-1">OR CLICK TO SELECT FILE</p>
                     <input type="file" id="file-upload" accept="image/png, image/jpeg, image/webp">
                 </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loader-overlay" class="absolute inset-0 bg-black flex justify-around hidden overflow-hidden">
+                <!-- Code columns will be generated here -->
             </div>
 
             <!-- Main Content Area (hidden until upload) -->
@@ -118,12 +124,8 @@
             
                 <!-- Action Buttons -->
                 <div id="action-buttons" class="mt-8">
-                    <button id="download-btn" class="btn btn-primary w-full sm:w-auto">
-                        DOWNLOAD REPLICA
-                    </button>
-                     <button id="reset-btn" class="btn mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto">
-                        NEW SUBJECT
-                    </button>
+                    <button id="download-btn" class="btn btn-primary w-full sm:w-auto">DOWNLOAD REPLICA</button>
+                    <button id="reset-btn" class="btn mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto">NEW SUBJECT</button>
                 </div>
             </div>
         </main>
@@ -136,6 +138,7 @@
     <script>
         // DOM element references
         const dropZone = document.getElementById('drop-zone');
+        const loaderOverlay = document.getElementById('loader-overlay');
         const fileUpload = document.getElementById('file-upload');
         const contentArea = document.getElementById('content-area');
         const imagePreview = document.getElementById('image-preview');
@@ -153,20 +156,17 @@
         const processedCtx = processedCanvas.getContext('2d');
         const transitionCtx = transitionCanvas.getContext('2d');
 
-        let currentTemp = 'warm'; // Default temperature is now 'warm'
+        let currentTemp = 'warm';
         let isTransitioning = false;
+        let loaderInterval = null;
 
         // --- Event Listeners ---
         dropZone.addEventListener('click', () => fileUpload.click());
-        fileUpload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
-        });
+        fileUpload.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) handleFile(file); });
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
         dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
         dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             dropZone.classList.remove('drag-over');
             const file = e.dataTransfer.files[0];
             if (file) handleFile(file);
@@ -179,11 +179,9 @@
         });
         resetBtn.addEventListener('click', () => {
             fileUpload.value = '';
-            dropZone.classList.remove('hidden');
             contentArea.classList.add('hidden');
+            dropZone.classList.remove('hidden');
         });
-
-        // Temperature button listeners
         tempControls.addEventListener('click', (e) => {
             if (e.target.matches('.temp-btn') && !isTransitioning) {
                 const selectedTemp = e.target.dataset.temp;
@@ -193,18 +191,76 @@
             }
         });
 
-        // --- Core Logic ---
+        // --- AI Code Loader Animation Logic ---
+        const codeChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+        function generateCodeLine() {
+            let line = '';
+            const length = Math.floor(Math.random() * 10) + 5;
+            for (let i = 0; i < length; i++) {
+                line += codeChars.charAt(Math.floor(Math.random() * codeChars.length));
+            }
+            const prefixes = ['const ', 'let ', 'var ', 'function ', '() => ', '0x', 'if (', 'return '];
+            return Math.random() > 0.7 ? prefixes[Math.floor(Math.random() * prefixes.length)] + line : line;
+        }
 
+        function startLoaderAnimation() {
+            loaderOverlay.innerHTML = ''; // Clear previous
+            const numColumns = Math.floor(window.innerWidth / 50);
+            for (let i = 0; i < numColumns; i++) {
+                const column = document.createElement('div');
+                column.className = 'code-column';
+                // Populate with initial content
+                for(let j = 0; j < 30; j++) {
+                    column.textContent += generateCodeLine() + '\n';
+                }
+                loaderOverlay.appendChild(column);
+            }
+
+            loaderInterval = setInterval(() => {
+                document.querySelectorAll('.code-column').forEach(col => {
+                    col.textContent = generateCodeLine() + '\n' + col.textContent;
+                     // Trim to prevent performance issues
+                    if (col.textContent.length > 2000) {
+                        col.textContent = col.textContent.substring(0, 2000);
+                    }
+                });
+            }, 50);
+        }
+
+        function stopLoaderAnimation() {
+            clearInterval(loaderInterval);
+            loaderInterval = null;
+        }
+
+        // --- Core Logic ---
         function handleFile(file) {
+            dropZone.classList.add('hidden');
+            loaderOverlay.classList.remove('hidden');
+            contentArea.classList.add('hidden');
+            startLoaderAnimation();
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    processImage(img);
-                    dropZone.classList.add('hidden');
-                    contentArea.classList.remove('hidden');
+                    const minLoaderTime = new Promise(resolve => setTimeout(resolve, 1500));
+                    const processing = new Promise(resolve => {
+                        processImage(img);
+                        resolve();
+                    });
+
+                    Promise.all([processing, minLoaderTime]).then(() => {
+                        stopLoaderAnimation();
+                        loaderOverlay.classList.add('hidden');
+                        contentArea.classList.remove('hidden');
+                    });
                 };
-                img.onerror = () => alert("FILE READ ERROR. PLEASE TRY AGAIN.");
+                img.onerror = () => {
+                    alert("FILE READ ERROR. PLEASE TRY AGAIN.");
+                    stopLoaderAnimation();
+                    loaderOverlay.classList.add('hidden');
+                    dropZone.classList.remove('hidden');
+                };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
@@ -221,44 +277,25 @@
             applyChannelCurves(curveImageData.data);
             curvesCtx.putImageData(curveImageData, 0, 0);
             
-            // Set default temp and active button
             currentTemp = 'warm';
             updateActiveButton();
-
-            // Apply the default temperature change without a transition
             applyTemperatureChange(currentTemp);
         }
 
-        /**
-         * Initiates the crossfade transition between temperatures.
-         */
         function initiateTemperatureChange(newTemp) {
             isTransitioning = true;
-            
-            // 1. Draw the current image (old temp) to the transition canvas
             transitionCtx.clearRect(0, 0, transitionCanvas.width, transitionCanvas.height);
             transitionCtx.drawImage(processedCanvas, 0, 0);
             transitionCanvas.style.opacity = 1;
-
-            // 2. Apply the new temperature change to the main processed canvas
+            
             applyTemperatureChange(newTemp);
             currentTemp = newTemp;
             updateActiveButton();
-
-            // 3. Fade out the transition canvas to reveal the new image
-            setTimeout(() => {
-                transitionCanvas.style.opacity = 0;
-            }, 20); // Small delay to ensure the new image is rendered
-
-            // 4. End the transition state after the animation completes
-            setTimeout(() => {
-                isTransitioning = false;
-            }, 400); // Match the CSS transition duration
+            
+            setTimeout(() => { transitionCanvas.style.opacity = 0; }, 20);
+            setTimeout(() => { isTransitioning = false; }, 400);
         }
         
-        /**
-         * Applies the selected temperature to the curve-adjusted image and updates the view.
-         */
         function applyTemperatureChange(temp) {
             const { width, height } = curvesCanvas;
             const baseImageData = curvesCtx.getImageData(0, 0, width, height);
