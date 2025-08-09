@@ -18,11 +18,9 @@
             font-family: 'Syne', sans-serif;
             letter-spacing: 0.05em;
         }
-        /* Hide the default file input button */
         #file-upload {
             display: none;
         }
-        /* Custom styles for the drop zone */
         #drop-zone {
             border-color: #444;
             transition: background-color 0.3s ease, border-color 0.3s ease;
@@ -53,27 +51,39 @@
             color: #0A0A0A;
             box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
         }
-        .glitch-text {
-            animation: glitch 1s linear infinite;
+        .temp-btn {
+            border: 1px solid #555;
+            color: #888;
+            transition: all 0.2s ease-in-out;
         }
-        @keyframes glitch{
-          2%,64%{ transform: translate(2px,0) skew(0deg); }
-          4%,60%{ transform: translate(-2px,0) skew(0deg); }
-          62%{ transform: translate(0,0) skew(5deg); }
+        .temp-btn.active {
+            color: #FFFFFF;
+            border-color: #FFFFFF;
+            background-color: #222;
+        }
+        .temp-btn.hot:hover, .temp-btn.hot.active { border-color: #FF8A00; color: #FF8A00; }
+        .temp-btn.warm:hover, .temp-btn.warm.active { border-color: #FFC900; color: #FFC900; }
+        .temp-btn.cold:hover, .temp-btn.cold.active { border-color: #00A3FF; color: #00A3FF; }
+        .temp-btn.frozen:hover, .temp-btn.frozen.active { border-color: #00E0FF; color: #00E0FF; }
+        
+        /* Styles for the crossfade transition */
+        #transition-canvas {
+            transition: opacity 0.4s ease-in-out;
         }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-2xl text-center">
+    <div class="w-full max-w-3xl text-center">
         <!-- Header -->
         <header class="mb-12">
             <h1 class="font-display text-4xl md:text-5xl font-bold text-white">PROJECT DOPPELGANGER</h1>
-            <p class="mt-2 text-sm text-gray-400">REPLICATE MY AESTHETIC.</p>
+            <p class="mt-2 text-sm text-gray-400">REPLICATE THE LOOK</p>
         </header>
 
         <!-- Canvases for processing (hidden from user) -->
         <canvas id="original-canvas" class="hidden"></canvas>
+        <canvas id="curves-canvas" class="hidden"></canvas>
         <canvas id="processed-canvas" class="hidden"></canvas>
 
         <!-- Uploader / Previewer -->
@@ -87,19 +97,34 @@
                 </div>
             </div>
 
-            <!-- Image Preview Area -->
-            <div id="image-preview-container" class="mt-8 hidden">
-                <img id="image-preview" src="#" alt="Processed image" class="w-full h-auto border border-gray-700">
-            </div>
+            <!-- Main Content Area (hidden until upload) -->
+            <div id="content-area" class="hidden">
+                 <!-- Image Preview Area with Transition Canvas -->
+                <div id="image-preview-container" class="mt-8 relative">
+                    <img id="image-preview" src="#" alt="Processed image" class="w-full h-auto border border-gray-700 bg-black">
+                    <canvas id="transition-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+                </div>
+
+                <!-- Temperature Controls -->
+                <div id="temp-controls" class="mt-8">
+                    <p class="text-sm text-gray-400 mb-4">TEMPERATURE</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <button class="temp-btn hot" data-temp="hot">HOT</button>
+                        <button class="temp-btn warm" data-temp="warm">WARM</button>
+                        <button class="temp-btn cold" data-temp="cold">COLD</button>
+                        <button class="temp-btn frozen" data-temp="frozen">FROZEN</button>
+                    </div>
+                </div>
             
-            <!-- Action Buttons -->
-            <div id="action-buttons" class="mt-8 hidden">
-                <button id="download-btn" class="btn btn-primary w-full sm:w-auto">
-                    DOWNLOAD REPLICA
-                </button>
-                 <button id="reset-btn" class="btn mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto">
-                    NEW SUBJECT
-                </button>
+                <!-- Action Buttons -->
+                <div id="action-buttons" class="mt-8">
+                    <button id="download-btn" class="btn btn-primary w-full sm:w-auto">
+                        DOWNLOAD REPLICA
+                    </button>
+                     <button id="reset-btn" class="btn mt-4 sm:mt-0 sm:ml-4 w-full sm:w-auto">
+                        NEW SUBJECT
+                    </button>
+                </div>
             </div>
         </main>
 
@@ -112,16 +137,24 @@
         // DOM element references
         const dropZone = document.getElementById('drop-zone');
         const fileUpload = document.getElementById('file-upload');
-        const uploadPrompt = document.getElementById('upload-prompt');
-        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const contentArea = document.getElementById('content-area');
         const imagePreview = document.getElementById('image-preview');
-        const actionButtons = document.getElementById('action-buttons');
+        const tempControls = document.getElementById('temp-controls');
         const downloadBtn = document.getElementById('download-btn');
         const resetBtn = document.getElementById('reset-btn');
+        
+        // Canvas elements
         const originalCanvas = document.getElementById('original-canvas');
+        const curvesCanvas = document.getElementById('curves-canvas');
         const processedCanvas = document.getElementById('processed-canvas');
+        const transitionCanvas = document.getElementById('transition-canvas');
         const originalCtx = originalCanvas.getContext('2d');
+        const curvesCtx = curvesCanvas.getContext('2d');
         const processedCtx = processedCanvas.getContext('2d');
+        const transitionCtx = transitionCanvas.getContext('2d');
+
+        let currentTemp = 'warm'; // Default temperature is now 'warm'
+        let isTransitioning = false;
 
         // --- Event Listeners ---
         dropZone.addEventListener('click', () => fileUpload.click());
@@ -129,16 +162,8 @@
             const file = e.target.files[0];
             if (file) handleFile(file);
         });
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropZone.classList.add('drag-over');
-        });
-        dropZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropZone.classList.remove('drag-over');
-        });
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -148,15 +173,24 @@
         });
         downloadBtn.addEventListener('click', () => {
             const link = document.createElement('a');
-            link.download = 'DOPPELGANGER.png';
+            link.download = `DOPPELGANGER_${currentTemp.toUpperCase()}.png`;
             link.href = processedCanvas.toDataURL('image/png');
             link.click();
         });
         resetBtn.addEventListener('click', () => {
             fileUpload.value = '';
             dropZone.classList.remove('hidden');
-            imagePreviewContainer.classList.add('hidden');
-            actionButtons.classList.add('hidden');
+            contentArea.classList.add('hidden');
+        });
+
+        // Temperature button listeners
+        tempControls.addEventListener('click', (e) => {
+            if (e.target.matches('.temp-btn') && !isTransitioning) {
+                const selectedTemp = e.target.dataset.temp;
+                if (selectedTemp !== currentTemp) {
+                    initiateTemperatureChange(selectedTemp);
+                }
+            }
         });
 
         // --- Core Logic ---
@@ -168,8 +202,7 @@
                 img.onload = () => {
                     processImage(img);
                     dropZone.classList.add('hidden');
-                    imagePreviewContainer.classList.remove('hidden');
-                    actionButtons.classList.remove('hidden');
+                    contentArea.classList.remove('hidden');
                 };
                 img.onerror = () => alert("FILE READ ERROR. PLEASE TRY AGAIN.");
                 img.src = e.target.result;
@@ -178,21 +211,71 @@
         }
 
         function processImage(img) {
-            originalCanvas.width = processedCanvas.width = img.width;
-            originalCanvas.height = processedCanvas.height = img.height;
+            const { width, height } = img;
+            [originalCanvas, curvesCanvas, processedCanvas, transitionCanvas].forEach(canvas => {
+                canvas.width = width;
+                canvas.height = height;
+            });
             originalCtx.drawImage(img, 0, 0);
-            const imageData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+            const curveImageData = originalCtx.getImageData(0, 0, width, height);
+            applyChannelCurves(curveImageData.data);
+            curvesCtx.putImageData(curveImageData, 0, 0);
             
-            applyColorGradeAndWarmth(imageData.data);
+            // Set default temp and active button
+            currentTemp = 'warm';
+            updateActiveButton();
+
+            // Apply the default temperature change without a transition
+            applyTemperatureChange(currentTemp);
+        }
+
+        /**
+         * Initiates the crossfade transition between temperatures.
+         */
+        function initiateTemperatureChange(newTemp) {
+            isTransitioning = true;
             
-            processedCtx.putImageData(imageData, 0, 0);
+            // 1. Draw the current image (old temp) to the transition canvas
+            transitionCtx.clearRect(0, 0, transitionCanvas.width, transitionCanvas.height);
+            transitionCtx.drawImage(processedCanvas, 0, 0);
+            transitionCanvas.style.opacity = 1;
+
+            // 2. Apply the new temperature change to the main processed canvas
+            applyTemperatureChange(newTemp);
+            currentTemp = newTemp;
+            updateActiveButton();
+
+            // 3. Fade out the transition canvas to reveal the new image
+            setTimeout(() => {
+                transitionCanvas.style.opacity = 0;
+            }, 20); // Small delay to ensure the new image is rendered
+
+            // 4. End the transition state after the animation completes
+            setTimeout(() => {
+                isTransitioning = false;
+            }, 400); // Match the CSS transition duration
+        }
+        
+        /**
+         * Applies the selected temperature to the curve-adjusted image and updates the view.
+         */
+        function applyTemperatureChange(temp) {
+            const { width, height } = curvesCanvas;
+            const baseImageData = curvesCtx.getImageData(0, 0, width, height);
+            applyTemperatureShift(baseImageData.data, temp);
+            processedCtx.putImageData(baseImageData, 0, 0);
             imagePreview.src = processedCanvas.toDataURL('image/png');
+        }
+
+        function updateActiveButton() {
+            document.querySelectorAll('.temp-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.temp === currentTemp);
+            });
         }
         
         function generateCurveLUT(x1, y1, x2, y2) {
             const lut = new Uint8ClampedArray(256);
             const points = [ [0,0], [x1,y1], [x2,y2], [255,255] ];
-
             for (let i = 0; i < 256; i++) {
                 let p1 = points[0], p2 = points[1];
                 if (i >= x1) { p1 = points[1]; p2 = points[2]; }
@@ -202,33 +285,33 @@
             }
             return lut;
         }
-
-        function applyColorGradeAndWarmth(data) {
-            // Red Channel: low highlights, slightly high shadows (Inverse S-Curve)
+        
+        function applyChannelCurves(data) {
             const redLUT = generateCurveLUT(64, 80, 192, 176);
-            
-            // Green Channel: high highlights, but kept in check to let blue dominate.
             const greenLUT = generateCurveLUT(96, 96, 192, 210);
-
-            // Blue Channel: Pushed even higher in the highlights for a strong blue cast.
             const blueLUT = generateCurveLUT(64, 48, 192, 230);
-            
-            // Warming filter to add back some temperature
-            const warmStrength = 15;
-
             for (let i = 0; i < data.length; i += 4) {
-                let r = redLUT[data[i]];
-                let g = greenLUT[data[i + 1]];
-                let b = blueLUT[data[i + 2]];
+                data[i] = redLUT[data[i]];
+                data[i + 1] = greenLUT[data[i + 1]];
+                data[i + 2] = blueLUT[data[i + 2]];
+            }
+        }
 
-                r = Math.min(255, r + warmStrength);
-                b = Math.max(0, b - warmStrength);
-
-                data[i] = r;
-                data[i + 1] = g;
-                data[i + 2] = b;
+        function applyTemperatureShift(data, temp) {
+            let rShift = 0, bShift = 0;
+            switch (temp) {
+                case 'hot':    rShift = 15; bShift = -15; break;
+                case 'warm':   rShift = 8;  bShift = -8;  break;
+                case 'cold':   rShift = -8; bShift = 8;   break;
+                case 'frozen': rShift = -15; bShift = 15;  break;
+            }
+            if (rShift === 0 && bShift === 0) return;
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.max(0, Math.min(255, data[i] + rShift));
+                data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + bShift));
             }
         }
     </script>
 </body>
 </html>
+
